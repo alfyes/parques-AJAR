@@ -188,6 +188,7 @@ export default class GameScene extends Phaser.Scene {
     } else {
       // Aún quedan movimientos: actualizar UI
       this.game.events.emit('movementsLeft', this.movementsLeft);
+      this.game.events.emit('diceReady', false); // No se pueden tirar dados mientras hay movimientos pendientes
     }
     
     this.clearHighlights();
@@ -345,6 +346,7 @@ export default class GameScene extends Phaser.Scene {
       } else {
         // Aún quedan intentos: actualizar UI
         this.game.events.emit('rollsLeft', this.rollsLeft);
+        this.game.events.emit('diceReady', true);
         this.currentDice = null; // limpiar dados para evitar selección de fichas
       }
     }
@@ -379,6 +381,7 @@ export default class GameScene extends Phaser.Scene {
     this.enableCurrentPlayerPieces();
     this.game.events.emit('rollsLeft', this.rollsLeft);
     this.game.events.emit('movementsLeft', this.movementsLeft);
+    this.game.events.emit('diceReady', true);
   }
 
   /** Coloca fichas iniciales según las reglas de dobles */
@@ -508,6 +511,7 @@ export default class GameScene extends Phaser.Scene {
     // notificar tiros restantes y habilitar piezas
     this.game.events.emit('rollsLeft', this.rollsLeft);
     this.game.events.emit('movementsLeft', this.movementsLeft);
+    this.game.events.emit('diceReady', this.rollsLeft > 0 && this.movementsLeft === 0);
     this.enableCurrentPlayerPieces();
   }
 

@@ -33,9 +33,20 @@ export default class UIScene extends Phaser.Scene {
       this.stateText.setText(`Estado: ${stateNames[state] || state}`);
     });
     // botón para tirar dados
-    const btn = this.add.rectangle(width - 80, height - 50, 160, 40, 0x888888).setInteractive();
-    this.add.text(width - 80, height - 50, 'Tirar dados', { fontSize: '18px', fill: '#000' }).setOrigin(0.5);
-    btn.on('pointerdown', () => {
+    this.diceButton = this.add.rectangle(width - 80, height - 50, 160, 40, 0x888888).setInteractive();
+    this.diceButtonText = this.add.text(width - 80, height - 50, 'Tirar dados', { fontSize: '18px', fill: '#000' }).setOrigin(0.5);
+    
+    // Variables para controlar el estado del botón
+    this.canRollDice = true;
+    this.movementsLeft = 0;
+    this.rollsLeft = 0;
+    
+    this.diceButton.on('pointerdown', () => {
+      if (!this.canRollDice) return; // No permitir tirar si hay movimientos pendientes
+      
+      // Deshabilitar botón durante la animación
+      this.setDiceButtonEnabled(false);
+      
       // animación de tirada: flicker de valores aleatorios
       let count = 0;
       const flicks = 10;
@@ -62,5 +73,45 @@ export default class UIScene extends Phaser.Scene {
     this.game.events.on('diceRolled', (d1, d2) => {
       this.diceText.setText(`Dados: ${d1} y ${d2}`);
     });
+
+    // Escuchar cambios en movimientos para controlar el botón
+    this.game.events.on('movementsLeft', (n) => {
+      this.movementsLeft = n;
+      this.updateDiceButtonState();
+    });
+
+    // Escuchar cambios en tiros para controlar el botón
+    this.game.events.on('rollsLeft', (n) => {
+      this.rollsLeft = n;
+      this.updateDiceButtonState();
+    });
+
+    // Escuchar cuando los dados estén listos
+    this.game.events.on('diceReady', (ready) => {
+      if (ready) {
+        this.updateDiceButtonState();
+      }
+    });
   }
-} 
+
+  /** Actualiza el estado del botón de dados según movimientos y tiros pendientes */
+  updateDiceButtonState() {
+    // Habilitar botón solo si hay tiros disponibles Y no hay movimientos pendientes
+    const shouldEnable = this.rollsLeft > 0 && this.movementsLeft === 0;
+    this.setDiceButtonEnabled(shouldEnable);
+  }
+
+  /** Habilita o deshabilita el botón de dados */
+  setDiceButtonEnabled(enabled) {
+    this.canRollDice = enabled;
+    if (enabled) {
+      this.diceButton.setFillStyle(0x888888);
+      this.diceButtonText.setFill('#000');
+      this.diceButton.setInteractive();
+    } else {
+      this.diceButton.setFillStyle(0x444444);
+      this.diceButtonText.setFill('#666');
+      this.diceButton.disableInteractive();
+    }
+  }
+}
