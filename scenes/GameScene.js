@@ -1,6 +1,7 @@
 import Board from '../classes/Board.js';
 import Dice from '../classes/Dice.js';
 import Player from '../classes/Player.js';
+import HelpSystem from '../classes/HelpSystem.js';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -26,6 +27,9 @@ export default class GameScene extends Phaser.Scene {
     this.drawBoard();
     // lanzar la escena de UI para mostrar controles de dados
     this.scene.launch('UIScene');
+    
+    // Inicializar sistema de ayuda
+    this.helpSystem = new HelpSystem(this);
     // inicializar turnos y tiros tras el lanzamiento de la UI (demorar un tick)
     this.time.delayedCall(0, () => {
       this.resetRolls();
@@ -34,6 +38,11 @@ export default class GameScene extends Phaser.Scene {
       this.game.events.emit('movementsLeft', this.movementsLeft);
       this.game.events.emit('turnStateChanged', this.turnState);
       this.enableCurrentPlayerPieces();
+    }, null, this);
+    
+    // Mostrar tutorial al inicio después de un pequeño retraso
+    this.time.delayedCall(1000, () => {
+      this.helpSystem.showTutorial();
     }, null, this);
 
     // configurar 4 jugadores (1 local + 3 CPU) y dibujar fichas en casas
@@ -299,6 +308,8 @@ export default class GameScene extends Phaser.Scene {
               p2.sprite.setFillStyle(p2.player.color, 1).setStrokeStyle(2, 0x000000);
               p2.sprite.setDepth(1);
               console.log(`Ficha capturada: player ${pl.id}, index ${p2.index}`);
+              const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+              this.helpSystem.showTemporaryMessage(`¡Capturada! Ficha ${playerNames[pl.id]} vuelve a casa`, 2500);
             }
           });
         }
@@ -313,6 +324,7 @@ export default class GameScene extends Phaser.Scene {
     
     // Verificar si la ficha llegó a la meta
     if (this.board.isAtGoal(piece)) {
+      this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
       this.movePieceToGoal(piece);
     }
     
@@ -367,6 +379,7 @@ export default class GameScene extends Phaser.Scene {
     
     // Verificar si la ficha llegó a la meta
     if (this.board.isAtGoal(piece)) {
+      this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
       this.movePieceToGoal(piece);
     }
     
@@ -413,6 +426,7 @@ export default class GameScene extends Phaser.Scene {
     if (isDouble) {
       // Conseguimos dobles: colocar ficha y cambiar a fase normal
       console.log(`¡Dobles conseguidos! (${d1},${d2}) - Colocando ficha`);
+      this.helpSystem.showTemporaryMessage('¡Dobles! Puedes sacar una ficha de casa', 2500);
       this.placeInitialPiece(d1);
       // Cambiar a fase normal con tirada extra por dobles
       this.turnState = 'NORMAL_MOVEMENT';
@@ -428,6 +442,7 @@ export default class GameScene extends Phaser.Scene {
       console.log(`No son dobles (${d1},${d2}) - Intentos restantes: ${this.rollsLeft}`);
       if (this.rollsLeft <= 0) {
         // Se agotaron los intentos: pasar turno
+        this.helpSystem.showTemporaryMessage('Sin dobles. Turno perdido', 2000);
         this.endTurn(false);
       } else {
         // Aún quedan intentos: actualizar UI
@@ -456,8 +471,11 @@ export default class GameScene extends Phaser.Scene {
       if (this.consecutiveDoubles >= 3) {
         // 3 dobles consecutivos: última ficha movida va a meta
         console.log('¡3 dobles consecutivos! Última ficha movida va a meta');
+        this.helpSystem.showTemporaryMessage('¡3 dobles seguidos! Tu ficha va directo a la meta', 3000);
         this.handleThreeConsecutiveDoubles();
         return;
+      } else {
+        this.helpSystem.showTemporaryMessage('¡Dobles! Tienes una tirada extra', 2000);
       }
     } else {
       this.consecutiveDoubles = 0;
@@ -466,6 +484,7 @@ export default class GameScene extends Phaser.Scene {
     // Verificar si el jugador tiene movimientos válidos disponibles
     if (!this.hasValidMovements()) {
       console.log('No hay movimientos válidos disponibles - perdiendo turno');
+      this.helpSystem.showTemporaryMessage('No hay movimientos válidos. Turno perdido', 2500);
       this.endTurn(false);
       return;
     }
@@ -708,7 +727,10 @@ export default class GameScene extends Phaser.Scene {
       const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
       console.log(`¡El jugador ${playerNames[playerId]} ha ganado!`);
       
-      // Mostrar mensaje de victoria
+      // Mostrar mensaje temporal de victoria
+      this.helpSystem.showTemporaryMessage(`¡${playerNames[playerId]} es el GANADOR! 🏆`, 5000);
+      
+      // Mostrar mensaje de victoria permanente
       this.add.text(
         this.cameras.main.width / 2,
         this.cameras.main.height / 2,
