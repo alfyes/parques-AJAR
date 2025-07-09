@@ -844,6 +844,18 @@ export default class GameScene extends Phaser.Scene {
               
               // Verificar si el jugador ganó (todas las fichas en meta)
               this.checkWinCondition(playerId);
+              
+              // Verificar si quedan movimientos válidos después de llegar a la meta
+              if (this.turnState === 'NORMAL_MOVEMENT' && this.movementsLeft > 0) {
+                if (!this.hasValidMovements()) {
+                  console.log('No quedan movimientos válidos después de llegar a meta - terminando turno');
+                  this.endTurn(false);
+                } else {
+                  // Actualizar UI para mostrar movimientos restantes
+                  this.game.events.emit('movementsLeft', this.movementsLeft);
+                  this.game.events.emit('diceReady', false);
+                }
+              }
             }
           });
         }
