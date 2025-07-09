@@ -186,9 +186,15 @@ export default class GameScene extends Phaser.Scene {
         this.endTurn(false);
       }
     } else {
-      // Aún quedan movimientos: actualizar UI
-      this.game.events.emit('movementsLeft', this.movementsLeft);
-      this.game.events.emit('diceReady', false); // No se pueden tirar dados mientras hay movimientos pendientes
+      // Aún quedan movimientos: verificar si hay movimientos válidos restantes
+      if (!this.hasValidMovements()) {
+        console.log('No quedan movimientos válidos - terminando turno');
+        this.endTurn(false);
+      } else {
+        // Actualizar UI
+        this.game.events.emit('movementsLeft', this.movementsLeft);
+        this.game.events.emit('diceReady', false); // No se pueden tirar dados mientras hay movimientos pendientes
+      }
     }
     
     this.clearHighlights();
@@ -337,6 +343,7 @@ export default class GameScene extends Phaser.Scene {
       this.game.events.emit('rollsLeft', this.rollsLeft);
       this.game.events.emit('movementsLeft', this.movementsLeft);
       this.game.events.emit('turnStateChanged', this.turnState);
+      this.game.events.emit('diceReady', true);
     } else {
       // No son dobles: consumir intento
       console.log(`No son dobles (${d1},${d2}) - Intentos restantes: ${this.rollsLeft}`);
@@ -375,6 +382,13 @@ export default class GameScene extends Phaser.Scene {
       }
     } else {
       this.consecutiveDoubles = 0;
+    }
+    
+    // Verificar si el jugador tiene movimientos válidos disponibles
+    if (!this.hasValidMovements()) {
+      console.log('No hay movimientos válidos disponibles - perdiendo turno');
+      this.endTurn(false);
+      return;
     }
     
     // Habilitar selección de fichas
@@ -476,6 +490,26 @@ export default class GameScene extends Phaser.Scene {
     }
     
     this.endTurn(false);
+  }
+
+  /** Verifica si el jugador actual tiene movimientos válidos disponibles */
+  hasValidMovements() {
+    const player = this.players[this.currentPlayerIdx];
+    
+    // Verificar cada movimiento pendiente
+    for (const movement of this.pendingMovements) {
+      if (!movement.used) {
+        // Verificar si alguna ficha puede usar este valor de dado
+        for (const piece of player.pieces) {
+          const possibleMoves = this.board.getPossibleMovesForSingleDice(piece, movement.diceValue);
+          if (possibleMoves.length > 0) {
+            return true; // Encontró al menos un movimiento válido
+          }
+        }
+      }
+    }
+    
+    return false; // No hay movimientos válidos disponibles
   }
 
   update(time, delta) {
