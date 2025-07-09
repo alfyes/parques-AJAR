@@ -16,6 +16,8 @@ export default class Board {
     this.createCells();
     // crear ruta principal como anillo de celdas
     this.createRoute();
+    // definir puntos de inicio y meta para cada jugador
+    this.setupPlayerRoutes();
   }
 
   /**
@@ -45,7 +47,7 @@ export default class Board {
    */
   createRoute() {
     this.route = [];
-    // salida inicial en (2,2)
+    // salida inicial en (2,2) - cerca de casa roja
     this.route.push(this.cells.find(c => c.row === 2 && c.col === 2));
     // lado izquierdo descendente: (3..12,2)
     for (let row = 3; row <= 12; row++) {
@@ -66,6 +68,77 @@ export default class Board {
   }
 
   /**
+   * Configura los puntos de inicio y meta para cada jugador
+   */
+  setupPlayerRoutes() {
+    // Calcular longitud total de la ruta para determinar la distancia de meta
+    const routeLength = this.route.length;
+    const targetDistance = routeLength; // Una vuelta completa
+    
+    // Definir puntos de inicio para cada jugador (adyacentes a sus casas)
+    // Rojo: (2,2) - ya está en índice 0
+    // Verde: cerca de esquina inferior izquierda - (12,2) 
+    // Azul: cerca de esquina inferior derecha - (12,12)
+    // Amarillo: cerca de esquina superior derecha - (2,12)
+    
+    this.playerStartIndices = {
+      0: 0,  // Rojo: (2,2)
+      1: this.findRouteIndex(2, 12),   // Amarillo: (2,12) 
+      2: this.findRouteIndex(12, 2),   // Verde: (12,2)
+      3: this.findRouteIndex(12, 12)   // Azul: (12,12)
+    };
+    
+    // Calcular índices de meta para cada jugador
+    this.playerGoalIndices = {};
+    for (let playerId = 0; playerId < 4; playerId++) {
+      const startIndex = this.playerStartIndices[playerId];
+      this.playerGoalIndices[playerId] = (startIndex + targetDistance - 1) % routeLength;
+    }
+    
+    console.log('Puntos de inicio:', this.playerStartIndices);
+    console.log('Puntos de meta:', this.playerGoalIndices);
+  }
+
+  /**
+   * Encuentra el índice en la ruta para una casilla específica
+   */
+  findRouteIndex(row, col) {
+    return this.route.findIndex(cell => cell.row === row && cell.col === col);
+  }
+
+  /**
+   * Obtiene el punto de inicio para un jugador específico
+   */
+  getPlayerStartIndex(playerId) {
+    return this.playerStartIndices[playerId] || 0;
+  }
+
+  /**
+   * Obtiene el punto de meta para un jugador específico
+   */
+  getPlayerGoalIndex(playerId) {
+    return this.playerGoalIndices[playerId] || 0;
+  }
+
+  /**
+   * Convierte una posición relativa del jugador a índice absoluto de la ruta
+   */
+  getAbsoluteRouteIndex(playerId, relativePosition) {
+    const startIndex = this.getPlayerStartIndex(playerId);
+    return (startIndex + relativePosition) % this.route.length;
+  }
+
+  /**
+   * Convierte un índice absoluto de la ruta a posición relativa del jugador
+   */
+  getRelativePosition(playerId, absoluteIndex) {
+    const startIndex = this.getPlayerStartIndex(playerId);
+    let relative = absoluteIndex - startIndex;
+    if (relative < 0) relative += this.route.length;
+    return relative;
+  }
+
+  /**
    * Devuelve todas las casillas del tablero.
    * @returns {Array<{row:number, col:number, x:number, y:number, type:string}>}
    */
@@ -79,20 +152,29 @@ export default class Board {
   getPossibleMoves(piece, diceValues) {
     const moves = [];
     const sum = diceValues[0] + diceValues[1];
+    const playerId = piece.player.id;
     
     // si la ficha está en casa, solo sale con dobles
     if (piece.routeIndex < 0) {
       if (diceValues[0] === diceValues[1]) {
-        // Salir de casa: colocar en salida y mover el valor del dado
-        const moveIndex = Math.min(diceValues[0], this.route.length - 1);
-        moves.push(this.route[moveIndex]);
+        // Salir de casa: ir al punto de inicio del jugador y mover el valor del dado
+        const startIndex = this.getPlayerStartIndex(playerId);
+        const moveSteps = Math.min(diceValues[0], this.route.length - 1);
+        const finalIndex = (startIndex + moveSteps) % this.route.length;
+        moves.push(this.route[finalIndex]);
       }
     } else {
-      // avanzar sum casillas en la ruta
-      const newIndex = piece.routeIndex + sum;
-      if (newIndex < this.route.length) {
+      // avanzar sum casillas en la ruta (con wrap-around)
+      const newIndex = (piece.routeIndex + sum) % this.route.length;
+      
+      // Verificar si ha completado más de una vuelta (llegado a meta)
+      const relativePosition = this.getRelativePosition(playerId, piece.routeIndex);
+      const goalPosition = this.route.length - 1; // Una vuelta completa
+      
+      if (relativePosition + sum <= goalPosition) {
         moves.push(this.route[newIndex]);
       }
+      // Si se pasa de la meta, no puede moverse (necesita número exacto)
     }
     return moves;
   }
@@ -102,17 +184,24 @@ export default class Board {
    */
   getPossibleMovesForSingleDice(piece, diceValue) {
     const moves = [];
+    const playerId = piece.player.id;
     
     // Si la ficha está en casa, no puede moverse con un solo dado
     if (piece.routeIndex < 0) {
       return moves;
     }
     
-    // Avanzar el valor del dado individual
-    const newIndex = piece.routeIndex + diceValue;
-    if (newIndex < this.route.length) {
+    // Avanzar el valor del dado individual (con wrap-around)
+    const newIndex = (piece.routeIndex + diceValue) % this.route.length;
+    
+    // Verificar si ha completado más de una vuelta (llegado a meta)
+    const relativePosition = this.getRelativePosition(playerId, piece.routeIndex);
+    const goalPosition = this.route.length - 1; // Una vuelta completa
+    
+    if (relativePosition + diceValue <= goalPosition) {
       moves.push(this.route[newIndex]);
     }
+    // Si se pasa de la meta, no puede moverse (necesita número exacto)
     
     return moves;
   }

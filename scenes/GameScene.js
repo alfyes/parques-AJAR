@@ -388,28 +388,32 @@ export default class GameScene extends Phaser.Scene {
   placeInitialPiece(diceValue) {
     const player = this.players[this.currentPlayerIdx];
     const piecesInHome = player.pieces.filter(p => p.routeIndex < 0);
+    const playerId = this.currentPlayerIdx;
+    
+    // Obtener el punto de inicio específico del jugador
+    const startIndex = this.board.getPlayerStartIndex(playerId);
+    const startCell = this.board.route[startIndex];
     
     if (piecesInHome.length >= 2) {
       // Puede introducir dos fichas
-      console.log(`Introduciendo dos fichas con dobles ${diceValue}`);
+      console.log(`Introduciendo dos fichas con dobles ${diceValue} - Jugador ${playerId}`);
       
-      // Primera ficha: colocar en salida y mover
+      // Primera ficha: colocar en salida del jugador y mover
       const firstPiece = piecesInHome[0];
-      firstPiece.routeIndex = 0;
-      const startCell = this.board.route[0];
+      firstPiece.routeIndex = startIndex;
       firstPiece.sprite.x = startCell.x + this.board.cellSize/2;
       firstPiece.sprite.y = startCell.y + this.board.cellSize/2;
       
       // Mover la primera ficha el valor del dado
-      const newIndex = Math.min(diceValue, this.board.route.length - 1);
+      const newIndex = (startIndex + diceValue) % this.board.route.length;
       firstPiece.routeIndex = newIndex;
       const newCell = this.board.route[newIndex];
       firstPiece.sprite.x = newCell.x + this.board.cellSize/2;
       firstPiece.sprite.y = newCell.y + this.board.cellSize/2;
       
-      // Segunda ficha: solo colocar en salida (con pequeño offset para evitar solapamiento)
+      // Segunda ficha: solo colocar en salida del jugador (con pequeño offset)
       const secondPiece = piecesInHome[1];
-      secondPiece.routeIndex = 0;
+      secondPiece.routeIndex = startIndex;
       secondPiece.sprite.x = startCell.x + this.board.cellSize/2 + 5; // offset visual
       secondPiece.sprite.y = startCell.y + this.board.cellSize/2 + 5;
       
@@ -419,8 +423,7 @@ export default class GameScene extends Phaser.Scene {
       console.log(`Solo una ficha en casa, introduciendo y moviendo otra del tablero`);
       
       const lastPiece = piecesInHome[0];
-      lastPiece.routeIndex = 0;
-      const startCell = this.board.route[0];
+      lastPiece.routeIndex = startIndex;
       lastPiece.sprite.x = startCell.x + this.board.cellSize/2;
       lastPiece.sprite.y = startCell.y + this.board.cellSize/2;
       
@@ -428,12 +431,19 @@ export default class GameScene extends Phaser.Scene {
       const pieceInBoard = player.pieces.find(p => p.routeIndex >= 0 && p !== lastPiece);
       if (pieceInBoard) {
         const currentIndex = pieceInBoard.routeIndex;
-        const newIndex = Math.min(currentIndex + diceValue, this.board.route.length - 1);
-        pieceInBoard.routeIndex = newIndex;
-        const newCell = this.board.route[newIndex];
-        pieceInBoard.sprite.x = newCell.x + this.board.cellSize/2;
-        pieceInBoard.sprite.y = newCell.y + this.board.cellSize/2;
-        console.log(`Ficha del tablero movida ${diceValue} casillas`);
+        const newIndex = (currentIndex + diceValue) % this.board.route.length;
+        
+        // Verificar que no se pase de la meta
+        const relativePos = this.board.getRelativePosition(playerId, currentIndex);
+        const goalPosition = this.board.route.length - 1;
+        
+        if (relativePos + diceValue <= goalPosition) {
+          pieceInBoard.routeIndex = newIndex;
+          const newCell = this.board.route[newIndex];
+          pieceInBoard.sprite.x = newCell.x + this.board.cellSize/2;
+          pieceInBoard.sprite.y = newCell.y + this.board.cellSize/2;
+          console.log(`Ficha del tablero movida ${diceValue} casillas`);
+        }
       }
     } else {
       // No hay fichas en casa (caso extraño)
