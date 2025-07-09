@@ -324,7 +324,7 @@ CONTROLES:
     
     let message = '';
     
-    const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+    const playerNames = ['Rojo', 'Verde', 'Azul', 'Amarillo'];
     const playerName = playerNames[currentPlayer];
 
     if (gameState === 'INITIAL_ROLLS') {

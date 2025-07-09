@@ -76,16 +76,16 @@ export default class Board {
     const targetDistance = routeLength; // Una vuelta completa
     
     // Definir puntos de inicio para cada jugador (adyacentes a sus casas)
-    // Rojo: (2,2) - ya está en índice 0
-    // Verde: cerca de esquina inferior izquierda - (12,2) 
-    // Azul: cerca de esquina inferior derecha - (12,12)
-    // Amarillo: cerca de esquina superior derecha - (2,12)
+    // Rojo: (2,2) - esquina superior izquierda
+    // Verde: (12,2) - esquina inferior izquierda
+    // Azul: (12,12) - esquina inferior derecha 
+    // Amarillo: (2,12) - esquina superior derecha
     
     this.playerStartIndices = {
       0: 0,  // Rojo: (2,2)
-      1: this.findRouteIndex(2, 12),   // Amarillo: (2,12) 
-      2: this.findRouteIndex(12, 2),   // Verde: (12,2)
-      3: this.findRouteIndex(12, 12)   // Azul: (12,12)
+      1: this.findRouteIndex(12, 2),   // Verde: (12,2) 
+      2: this.findRouteIndex(12, 12),  // Azul: (12,12)
+      3: this.findRouteIndex(2, 12)    // Amarillo: (2,12)
     };
     
     // Calcular índices de meta para cada jugador
@@ -109,7 +109,7 @@ export default class Board {
     this.goalPositions = {};
     
     // Posiciones al lado de cada casa para mostrar fichas que llegaron a la meta
-    // Rojo: al lado derecho de la casa roja
+    // Rojo: al lado derecho de la casa roja (esquina superior izquierda)
     this.goalPositions[0] = [
       { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
       { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 1 * this.cellSize },
@@ -117,28 +117,28 @@ export default class Board {
       { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 1 * this.cellSize }
     ];
     
-    // Amarillo: al lado izquierdo de la casa amarilla
+    // Verde: al lado derecho de la casa verde (esquina inferior izquierda)
     this.goalPositions[1] = [
-      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
-      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 1 * this.cellSize },
-      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
-      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 1 * this.cellSize }
-    ];
-    
-    // Verde: al lado derecho de la casa verde
-    this.goalPositions[2] = [
       { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
       { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 14 * this.cellSize },
       { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
       { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 14 * this.cellSize }
     ];
     
-    // Azul: al lado izquierdo de la casa azul
-    this.goalPositions[3] = [
+    // Azul: al lado izquierdo de la casa azul (esquina inferior derecha)
+    this.goalPositions[2] = [
       { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
       { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 14 * this.cellSize },
       { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
       { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 14 * this.cellSize }
+    ];
+    
+    // Amarillo: al lado izquierdo de la casa amarilla (esquina superior derecha)
+    this.goalPositions[3] = [
+      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
+      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 1 * this.cellSize },
+      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
+      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 1 * this.cellSize }
     ];
   }
 

@@ -6,7 +6,7 @@ export default class UIScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     // texto de turno activo
-    const turnNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+    const turnNames = ['Rojo', 'Verde', 'Azul', 'Amarillo'];
     this.turnText = this.add.text(100, 20, 'Turno: Rojo', { fontSize: '20px', fill: '#fff' }).setDepth(10);
     this.game.events.on('turnChanged', idx => {
       this.turnText.setText(`Turno: ${turnNames[idx]}`);

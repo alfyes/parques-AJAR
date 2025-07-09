@@ -51,8 +51,8 @@ export default class GameScene extends Phaser.Scene {
 
     // configurar 4 jugadores (1 local + 3 CPU) y dibujar fichas en casas
     this.players = [];
-    const homeTypes = ['home-red', 'home-yellow', 'home-green', 'home-blue'];
-    const colorValues = [0xff6666, 0xffff66, 0x66ff66, 0x6666ff];
+    const homeTypes = ['home-red', 'home-green', 'home-blue', 'home-yellow'];
+          const colorValues = [0xff6666, 0x66ff66, 0x6666ff, 0xffff66];
     for (let i = 0; i < 4; i++) {
       const isCPU = i !== 0;
       const player = new Player(i, colorValues[i], isCPU);
@@ -93,7 +93,7 @@ export default class GameScene extends Phaser.Scene {
    */
   drawBoard() {
     const graphics = this.add.graphics();
-    const playerColors = [0xff6666, 0xffff66, 0x66ff66, 0x6666ff]; // Rojo, Amarillo, Verde, Azul
+    const playerColors = [0xff6666, 0x66ff66, 0x6666ff, 0xffff66]; // Rojo, Verde, Azul, Amarillo
     
     this.board.getCells().forEach(cell => {
       let color = 0xffffff;
@@ -140,7 +140,7 @@ export default class GameScene extends Phaser.Scene {
    * Agrega pequeñas banderas en las casillas de meta
    */
   addGoalFlags() {
-    const playerColors = [0xff6666, 0xffff66, 0x66ff66, 0x6666ff]; // Rojo, Amarillo, Verde, Azul
+    const playerColors = [0xff6666, 0x66ff66, 0x6666ff, 0xffff66]; // Rojo, Verde, Azul, Amarillo
     
     for (let playerId = 0; playerId < 4; playerId++) {
       const goalIndex = this.board.getPlayerGoalIndex(playerId);
@@ -268,18 +268,31 @@ export default class GameScene extends Phaser.Scene {
         this.endTurn(false);
       }
     } else {
-      // Aún quedan movimientos: verificar si hay movimientos válidos restantes
-      if (!this.hasValidMovements()) {
-        console.log('No quedan movimientos válidos - terminando turno');
-        this.endTurn(false);
-      } else {
-        // Actualizar UI
-        this.game.events.emit('movementsLeft', this.movementsLeft);
-        this.game.events.emit('diceReady', false); // No se pueden tirar dados mientras hay movimientos pendientes
-      }
+      // Aún quedan movimientos: verificar si hay movimientos válidos restantes después de un pequeño delay
+      // para permitir que las animaciones terminen y las fichas se actualicen correctamente
+      this.time.delayedCall(100, () => {
+        if (!this.hasValidMovements()) {
+          console.log('No quedan movimientos válidos - terminando turno');
+          this.endTurn(false);
+        } else {
+          // Actualizar UI
+          this.game.events.emit('movementsLeft', this.movementsLeft);
+          this.game.events.emit('diceReady', false); // No se pueden tirar dados mientras hay movimientos pendientes
+        }
+      });
     }
     
     this.clearHighlights();
+    
+    // Verificación adicional después de limpiar highlights para asegurar que no queden movimientos bloqueados
+    if (this.turnState === 'NORMAL_MOVEMENT' && this.movementsLeft > 0) {
+      this.time.delayedCall(200, () => {
+        if (!this.hasValidMovements()) {
+          console.log('Verificación final: No quedan movimientos válidos - terminando turno');
+          this.endTurn(false);
+        }
+      });
+    }
   }
 
   /**
@@ -302,7 +315,7 @@ export default class GameScene extends Phaser.Scene {
                 p2.routeIndex = -1;
               });
               console.log(`Ficha capturada: player ${pl.id}, index ${p2.index}`);
-              const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+              const playerNames = ['Rojo', 'Verde', 'Azul', 'Amarillo'];
               this.helpSystem.showTemporaryMessage(`¡Capturada! Ficha ${playerNames[pl.id]} vuelve a casa`, 2500);
               // Reproducir sonido de captura
               this.audioManager.playCapture();
@@ -324,6 +337,14 @@ export default class GameScene extends Phaser.Scene {
         // Reproducir sonido de llegada a meta
         this.audioManager.playGoalReached();
         this.movePieceToGoal(piece);
+      } else {
+        // Si no llegó a la meta, verificar movimientos válidos aquí también
+        if (this.turnState === 'NORMAL_MOVEMENT' && this.movementsLeft > 0) {
+          if (!this.hasValidMovements()) {
+            console.log('No quedan movimientos válidos después del movimiento - terminando turno');
+            this.endTurn(false);
+          }
+        }
       }
     });
     
@@ -347,7 +368,7 @@ export default class GameScene extends Phaser.Scene {
               // regresar ficha enemiga a casa
               p2.routeIndex = -1;
               // ubicar ficha capturada en primer home libre para evitar solapamientos
-              const homeType = ['home-red','home-yellow','home-green','home-blue'][pl.id];
+              const homeType = ['home-red','home-green','home-blue','home-yellow'][pl.id];
               const homeCells = this.board.getCells().filter(c => c.type === homeType);
               // buscar celda libre
               let cellHome = homeCells.find(c => {
@@ -468,7 +489,7 @@ export default class GameScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => {
         // Encontrar celda de casa disponible
-        const homeType = ['home-red','home-yellow','home-green','home-blue'][capturedByPlayerId];
+        const homeType = ['home-red','home-green','home-blue','home-yellow'][capturedByPlayerId];
         const homeCells = this.board.getCells().filter(c => c.type === homeType);
         const player = this.players[capturedPiece.player.id];
         
@@ -871,7 +892,7 @@ export default class GameScene extends Phaser.Scene {
     const piecesInGoal = player.pieces.filter(p => p.routeIndex === -2).length;
     
     if (piecesInGoal === 4) {
-      const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+      const playerNames = ['Rojo', 'Verde', 'Azul', 'Amarillo'];
       console.log(`¡El jugador ${playerNames[playerId]} ha ganado!`);
       
       // Mostrar mensaje temporal de victoria
