@@ -36,12 +36,58 @@ export default class UIScene extends Phaser.Scene {
     this.diceButton = this.add.rectangle(width - 80, height - 50, 160, 40, 0x888888).setInteractive().setDepth(20);
     this.diceButtonText = this.add.text(width - 80, height - 50, 'Tirar dados', { fontSize: '18px', fill: '#000' }).setOrigin(0.5).setDepth(21);
     
+    // Añadir animaciones de hover para el botón de dados
+    this.diceButton.on('pointerover', () => {
+      if (this.canRollDice && !this.tutorialActive && !this.helpActive) {
+        this.tweens.add({
+          targets: [this.diceButton, this.diceButtonText],
+          scaleX: 1.05,
+          scaleY: 1.05,
+          duration: 100,
+          ease: 'Quad.easeOut'
+        });
+      }
+    });
+    
+    this.diceButton.on('pointerout', () => {
+      this.tweens.add({
+        targets: [this.diceButton, this.diceButtonText],
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+        ease: 'Quad.easeOut'
+      });
+    });
+    
     // Botón de tutorial
     this.tutorialButton = this.add.rectangle(100, height - 50, 140, 30, 0x2196F3)
       .setInteractive()
       .setStrokeStyle(2, 0x1976D2)
       .setDepth(20);
     this.tutorialButtonText = this.add.text(100, height - 50, 'Tutorial', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5).setDepth(21);
+    
+    // Añadir animaciones de hover para el botón de tutorial
+    this.tutorialButton.on('pointerover', () => {
+      if (!this.tutorialActive && !this.helpActive) {
+        this.tweens.add({
+          targets: [this.tutorialButton, this.tutorialButtonText],
+          scaleX: 1.05,
+          scaleY: 1.05,
+          duration: 100,
+          ease: 'Quad.easeOut'
+        });
+      }
+    });
+    
+    this.tutorialButton.on('pointerout', () => {
+      this.tweens.add({
+        targets: [this.tutorialButton, this.tutorialButtonText],
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+        ease: 'Quad.easeOut'
+      });
+    });
     
     // Variables para controlar el estado del botón
     this.canRollDice = true;
@@ -51,7 +97,32 @@ export default class UIScene extends Phaser.Scene {
     this.helpActive = false; // Nueva variable para controlar ayuda
     
     this.diceButton.on('pointerdown', () => {
-      if (!this.canRollDice || this.tutorialActive || this.helpActive) return; // No permitir tirar si hay movimientos pendientes, tutorial activo o ayuda activa
+      if (!this.canRollDice || this.tutorialActive || this.helpActive) {
+        // Reproducir sonido de error si se intenta tirar cuando no se puede
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.audioManager) {
+          gameScene.audioManager.playError();
+        }
+        return; // No permitir tirar si hay movimientos pendientes, tutorial activo o ayuda activa
+      }
+      
+      // Animación de click (efecto de presión)
+      this.tweens.add({
+        targets: [this.diceButton, this.diceButtonText],
+        scaleX: 0.95,
+        scaleY: 0.95,
+        duration: 80,
+        ease: 'Quad.easeOut',
+        yoyo: true
+      });
+      
+      // Reproducir sonido de click del botón
+      const gameScene = this.scene.get('GameScene');
+      if (gameScene && gameScene.audioManager) {
+        gameScene.audioManager.playButtonClick();
+        // Reproducir sonido de dados rodando
+        gameScene.audioManager.playDiceRoll();
+      }
       
       // Deshabilitar botón durante la animación
       this.setDiceButtonEnabled(false);
@@ -105,8 +176,24 @@ export default class UIScene extends Phaser.Scene {
     // Evento para el botón de tutorial
     this.tutorialButton.on('pointerdown', () => {
       if (this.tutorialActive) return; // Evitar abrir tutorial múltiples veces
-      // Obtener la escena del juego y mostrar el tutorial
+      
+      // Animación de click (efecto de presión)
+      this.tweens.add({
+        targets: [this.tutorialButton, this.tutorialButtonText],
+        scaleX: 0.95,
+        scaleY: 0.95,
+        duration: 80,
+        ease: 'Quad.easeOut',
+        yoyo: true
+      });
+      
+      // Reproducir sonido de click
       const gameScene = this.scene.get('GameScene');
+      if (gameScene && gameScene.audioManager) {
+        gameScene.audioManager.playButtonClick();
+      }
+      
+      // Obtener la escena del juego y mostrar el tutorial
       if (gameScene && gameScene.helpSystem) {
         gameScene.helpSystem.showTutorial();
       }

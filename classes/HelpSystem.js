@@ -59,9 +59,56 @@ export default class HelpSystem {
     // Tutorial overlay (modal completo)
     this.createTutorialOverlay();
 
+    // Añadir animaciones de hover para el botón de ayuda
+    this.helpButton.on('pointerover', () => {
+      if (!this.isHelpVisible) {
+        this.scene.tweens.add({
+          targets: [this.helpButton, this.helpButtonText],
+          scaleX: 1.1,
+          scaleY: 1.1,
+          duration: 150,
+          ease: 'Back.easeOut'
+        });
+      }
+    });
+    
+    this.helpButton.on('pointerout', () => {
+      this.scene.tweens.add({
+        targets: [this.helpButton, this.helpButtonText],
+        scaleX: 1,
+        scaleY: 1,
+        duration: 150,
+        ease: 'Back.easeOut'
+      });
+    });
+
     // Eventos de botones
-    this.helpButton.on('pointerdown', () => this.toggleHelp());
-    this.closeHelpButton.on('pointerdown', () => this.hideHelp());
+    this.helpButton.on('pointerdown', () => {
+      // Animación de click
+      this.scene.tweens.add({
+        targets: [this.helpButton, this.helpButtonText],
+        scaleX: 0.9,
+        scaleY: 0.9,
+        duration: 80,
+        ease: 'Quad.easeOut',
+        yoyo: true
+      });
+      
+      // Reproducir sonido de click
+      if (this.scene.audioManager) {
+        this.scene.audioManager.playButtonClick();
+      }
+      
+      this.toggleHelp();
+    });
+    
+    this.closeHelpButton.on('pointerdown', () => {
+      // Reproducir sonido de click
+      if (this.scene.audioManager) {
+        this.scene.audioManager.playButtonClick();
+      }
+      this.hideHelp();
+    });
   }
 
   createTutorialOverlay() {
@@ -142,12 +189,86 @@ export default class HelpSystem {
       this.showHelpButtonText
     ];
 
-    // Eventos para tutorial
-    this.closeTutorialButton.on('pointerdown', () => this.hideTutorial());
+    // Eventos para tutorial con animaciones
+    this.closeTutorialButton.on('pointerover', () => {
+      this.scene.tweens.add({
+        targets: [this.closeTutorialButton, this.closeTutorialText],
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 100,
+        ease: 'Quad.easeOut'
+      });
+    });
+    
+    this.closeTutorialButton.on('pointerout', () => {
+      this.scene.tweens.add({
+        targets: [this.closeTutorialButton, this.closeTutorialText],
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+        ease: 'Quad.easeOut'
+      });
+    });
+    
+    this.showHelpButton.on('pointerover', () => {
+      this.scene.tweens.add({
+        targets: [this.showHelpButton, this.showHelpButtonText],
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 100,
+        ease: 'Quad.easeOut'
+      });
+    });
+    
+    this.showHelpButton.on('pointerout', () => {
+      this.scene.tweens.add({
+        targets: [this.showHelpButton, this.showHelpButtonText],
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+        ease: 'Quad.easeOut'
+      });
+    });
+    
+    this.closeTutorialButton.on('pointerdown', () => {
+      // Animación de click
+      this.scene.tweens.add({
+        targets: [this.closeTutorialButton, this.closeTutorialText],
+        scaleX: 0.95,
+        scaleY: 0.95,
+        duration: 80,
+        ease: 'Quad.easeOut',
+        yoyo: true
+      });
+      
+      // Reproducir sonido de click
+      if (this.scene.audioManager) {
+        this.scene.audioManager.playButtonClick();
+      }
+      
+      this.hideTutorial();
+    });
+    
     this.showHelpButton.on('pointerdown', () => {
+      // Animación de click
+      this.scene.tweens.add({
+        targets: [this.showHelpButton, this.showHelpButtonText],
+        scaleX: 0.95,
+        scaleY: 0.95,
+        duration: 80,
+        ease: 'Quad.easeOut',
+        yoyo: true
+      });
+      
+      // Reproducir sonido de click
+      if (this.scene.audioManager) {
+        this.scene.audioManager.playButtonClick();
+      }
+      
       this.hideTutorial();
       this.showHelp();
     });
+    
     this.tutorialBackground.setInteractive().on('pointerdown', () => this.hideTutorial());
   }
 

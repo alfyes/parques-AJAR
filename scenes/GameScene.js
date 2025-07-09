@@ -2,6 +2,7 @@ import Board from '../classes/Board.js';
 import Dice from '../classes/Dice.js';
 import Player from '../classes/Player.js';
 import HelpSystem from '../classes/HelpSystem.js';
+import AudioManager from '../classes/AudioManager.js';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -30,6 +31,9 @@ export default class GameScene extends Phaser.Scene {
     
     // Inicializar sistema de ayuda
     this.helpSystem = new HelpSystem(this);
+    
+    // Inicializar sistema de audio
+    this.audioManager = new AudioManager();
     // inicializar turnos y tiros tras el lanzamiento de la UI (demorar un tick)
     this.time.delayedCall(0, () => {
       this.resetRolls();
@@ -292,39 +296,34 @@ export default class GameScene extends Phaser.Scene {
           pl.pieces.forEach(p2 => {
             if (p2.routeIndex === newIndex) {
               didCapture = true;
-              // regresar ficha enemiga a casa
-              p2.routeIndex = -1;
-              // ubicar ficha capturada en primer home libre
-              const homeType = ['home-red','home-yellow','home-green','home-blue'][pl.id];
-              const homeCells = this.board.getCells().filter(c => c.type === homeType);
-              let cellHome = homeCells.find(c => {
-                const px = c.x + this.board.cellSize/2;
-                const py = c.y + this.board.cellSize/2;
-                return !pl.pieces.some(p3 => p3.routeIndex < 0 && p3 !== p2 && p3.sprite.x === px && p3.sprite.y === py);
+              // Animar captura de ficha enemiga
+              this.animateCapture(p2, pl.id, () => {
+                // regresar ficha enemiga a casa
+                p2.routeIndex = -1;
               });
-              if (!cellHome) cellHome = homeCells[0];
-              p2.sprite.x = cellHome.x + this.board.cellSize/2;
-              p2.sprite.y = cellHome.y + this.board.cellSize/2;
-              p2.sprite.setFillStyle(p2.player.color, 1).setStrokeStyle(2, 0x000000);
-              p2.sprite.setDepth(1);
               console.log(`Ficha capturada: player ${pl.id}, index ${p2.index}`);
               const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
               this.helpSystem.showTemporaryMessage(`¡Capturada! Ficha ${playerNames[pl.id]} vuelve a casa`, 2500);
+              // Reproducir sonido de captura
+              this.audioManager.playCapture();
             }
           });
         }
       });
     }
     
-    // Mover ficha propia
-    piece.sprite.x = cell.x + this.board.cellSize/2;
-    piece.sprite.y = cell.y + this.board.cellSize/2;
-    piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
-    piece.routeIndex = newIndex;
+    // Animar movimiento de la ficha
+    this.animatePieceMovement(piece, cell, () => {
+      // Actualizar índice después de la animación
+      piece.routeIndex = newIndex;
+      piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
+    });
     
     // Verificar si la ficha llegó a la meta
     if (this.board.isAtGoal(piece)) {
       this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
+      // Reproducir sonido de llegada a meta
+      this.audioManager.playGoalReached();
       this.movePieceToGoal(piece);
     }
     
@@ -369,17 +368,19 @@ export default class GameScene extends Phaser.Scene {
       });
     }
     
-    // mover ficha propia
-    piece.sprite.x = cell.x + this.board.cellSize/2;
-    piece.sprite.y = cell.y + this.board.cellSize/2;
-    // aplicar el color del jugador a la pieza
-    piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
-    // actualizar índice de ruta
-    piece.routeIndex = newIndex;
+    // Animar movimiento de la ficha
+    this.animatePieceMovement(piece, cell, () => {
+      // Actualizar índice después de la animación
+      piece.routeIndex = newIndex;
+      // aplicar el color del jugador a la pieza
+      piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
+    });
     
     // Verificar si la ficha llegó a la meta
     if (this.board.isAtGoal(piece)) {
       this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
+      // Reproducir sonido de llegada a meta
+      this.audioManager.playGoalReached();
       this.movePieceToGoal(piece);
     }
     
@@ -407,10 +408,110 @@ export default class GameScene extends Phaser.Scene {
     this.moveMarkers = [];
   }
 
+  /** Anima el movimiento suave de una ficha a una nueva posición */
+  animatePieceMovement(piece, targetCell, onComplete = null) {
+    const targetX = targetCell.x + this.board.cellSize/2;
+    const targetY = targetCell.y + this.board.cellSize/2;
+    
+    // Reproducir sonido de movimiento
+    this.audioManager.playPieceMove();
+    
+    // Animar el movimiento con easing
+    this.tweens.add({
+      targets: piece.sprite,
+      x: targetX,
+      y: targetY,
+      duration: 400, // Duración de la animación en ms
+      ease: 'Quad.easeInOut',
+      onStart: () => {
+        // Hacer la ficha más prominente durante el movimiento
+        piece.sprite.setDepth(10);
+        piece.sprite.setScale(1.1);
+      },
+      onUpdate: (tween) => {
+        // Efecto de "rebote" sutil durante el movimiento
+        const progress = tween.progress;
+        const bounce = Math.sin(progress * Math.PI * 3) * 0.02;
+        piece.sprite.setScale(1.1 + bounce);
+      },
+      onComplete: () => {
+        // Restaurar escala y profundidad normal
+        piece.sprite.setScale(1);
+        piece.sprite.setDepth(1);
+        
+        // Efecto de "aterrizaje"
+        this.tweens.add({
+          targets: piece.sprite,
+          scaleX: 1.2,
+          scaleY: 0.8,
+          duration: 100,
+          ease: 'Quad.easeOut',
+          yoyo: true,
+          onComplete: () => {
+            piece.sprite.setScale(1);
+            if (onComplete) onComplete();
+          }
+        });
+      }
+    });
+  }
+
+  /** Anima la captura de una ficha enemiga */
+  animateCapture(capturedPiece, capturedByPlayerId, onComplete = null) {
+    // Efecto de "impacto" en la ficha capturada
+    this.tweens.add({
+      targets: capturedPiece.sprite,
+      scaleX: 1.5,
+      scaleY: 0.5,
+      alpha: 0.7,
+      duration: 150,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        // Encontrar celda de casa disponible
+        const homeType = ['home-red','home-yellow','home-green','home-blue'][capturedByPlayerId];
+        const homeCells = this.board.getCells().filter(c => c.type === homeType);
+        const player = this.players[capturedPiece.player.id];
+        
+        let cellHome = homeCells.find(c => {
+          const px = c.x + this.board.cellSize/2;
+          const py = c.y + this.board.cellSize/2;
+          return !player.pieces.some(p3 => p3.routeIndex < 0 && p3 !== capturedPiece && p3.sprite.x === px && p3.sprite.y === py);
+        });
+        if (!cellHome) cellHome = homeCells[0];
+        
+        const homeX = cellHome.x + this.board.cellSize/2;
+        const homeY = cellHome.y + this.board.cellSize/2;
+        
+        // Animar vuelta a casa con efecto de "salto"
+        this.tweens.add({
+          targets: capturedPiece.sprite,
+          x: homeX,
+          y: homeY,
+          scaleX: 1,
+          scaleY: 1,
+          alpha: 1,
+          duration: 600,
+          ease: 'Bounce.easeOut',
+          onStart: () => {
+            capturedPiece.sprite.setDepth(15);
+          },
+          onComplete: () => {
+            capturedPiece.sprite.setFillStyle(capturedPiece.player.color, 1).setStrokeStyle(2, 0x000000);
+            capturedPiece.sprite.setDepth(1);
+            if (onComplete) onComplete();
+          }
+        });
+      }
+    });
+  }
+
   /** Maneja la tirada de dados según el estado del turno */
   handleDiceRoll(d1, d2) {
     this.currentDice = [d1, d2];
     const isDouble = d1 === d2;
+    
+    // Reproducir sonido del resultado de los dados
+    this.audioManager.playDiceResult(isDouble);
     
     if (this.turnState === 'INITIAL_ROLLS') {
       this.handleInitialRolls(d1, d2, isDouble);
@@ -729,6 +830,9 @@ export default class GameScene extends Phaser.Scene {
       
       // Mostrar mensaje temporal de victoria
       this.helpSystem.showTemporaryMessage(`¡${playerNames[playerId]} es el GANADOR! 🏆`, 5000);
+      
+      // Reproducir sonido de victoria
+      this.audioManager.playVictory();
       
       // Mostrar mensaje de victoria permanente
       this.add.text(
