@@ -95,8 +95,77 @@ export default class Board {
       this.playerGoalIndices[playerId] = (startIndex + targetDistance - 1) % routeLength;
     }
     
+    // Definir posiciones visuales para fichas que llegaron a la meta (al lado de cada casa)
+    this.setupGoalPositions();
+    
     console.log('Puntos de inicio:', this.playerStartIndices);
     console.log('Puntos de meta:', this.playerGoalIndices);
+  }
+
+  /**
+   * Configura las posiciones visuales para las fichas que llegaron a la meta
+   */
+  setupGoalPositions() {
+    this.goalPositions = {};
+    
+    // Posiciones al lado de cada casa para mostrar fichas que llegaron a la meta
+    // Rojo: al lado derecho de la casa roja
+    this.goalPositions[0] = [
+      { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
+      { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 1 * this.cellSize },
+      { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
+      { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 1 * this.cellSize }
+    ];
+    
+    // Amarillo: al lado izquierdo de la casa amarilla
+    this.goalPositions[1] = [
+      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
+      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 1 * this.cellSize },
+      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 0 * this.cellSize },
+      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 1 * this.cellSize }
+    ];
+    
+    // Verde: al lado derecho de la casa verde
+    this.goalPositions[2] = [
+      { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
+      { x: this.offsetX + 2 * this.cellSize, y: this.offsetY + 14 * this.cellSize },
+      { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
+      { x: this.offsetX + 3 * this.cellSize, y: this.offsetY + 14 * this.cellSize }
+    ];
+    
+    // Azul: al lado izquierdo de la casa azul
+    this.goalPositions[3] = [
+      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
+      { x: this.offsetX + 11 * this.cellSize, y: this.offsetY + 14 * this.cellSize },
+      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 13 * this.cellSize },
+      { x: this.offsetX + 10 * this.cellSize, y: this.offsetY + 14 * this.cellSize }
+    ];
+  }
+
+  /**
+   * Obtiene la posición visual para una ficha que llegó a la meta
+   */
+  getGoalPosition(playerId, pieceIndex) {
+    return this.goalPositions[playerId] ? this.goalPositions[playerId][pieceIndex] : null;
+  }
+
+  /**
+   * Verifica si una ficha ha llegado exactamente a la meta
+   */
+  isAtGoal(piece) {
+    const playerId = piece.player.id;
+    const relativePosition = this.getRelativePosition(playerId, piece.routeIndex);
+    return relativePosition === this.route.length - 1;
+  }
+
+  /**
+   * Verifica si un movimiento llevaría a la ficha exactamente a la meta
+   */
+  wouldReachGoal(piece, steps) {
+    const playerId = piece.player.id;
+    const currentRelativePosition = this.getRelativePosition(playerId, piece.routeIndex);
+    const targetRelativePosition = currentRelativePosition + steps;
+    return targetRelativePosition === this.route.length - 1;
   }
 
   /**

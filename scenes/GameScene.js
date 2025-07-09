@@ -242,6 +242,11 @@ export default class GameScene extends Phaser.Scene {
     piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
     piece.routeIndex = newIndex;
     
+    // Verificar si la ficha llegó a la meta
+    if (this.board.isAtGoal(piece)) {
+      this.movePieceToGoal(piece);
+    }
+    
     return didCapture;
   }
 
@@ -290,6 +295,11 @@ export default class GameScene extends Phaser.Scene {
     piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
     // actualizar índice de ruta
     piece.routeIndex = newIndex;
+    
+    // Verificar si la ficha llegó a la meta
+    if (this.board.isAtGoal(piece)) {
+      this.movePieceToGoal(piece);
+    }
     
     return newIndex;
   }
@@ -401,7 +411,9 @@ export default class GameScene extends Phaser.Scene {
   /** Coloca fichas iniciales según las reglas de dobles */
   placeInitialPiece(diceValue) {
     const player = this.players[this.currentPlayerIdx];
-    const piecesInHome = player.pieces.filter(p => p.routeIndex < 0);
+    // Solo considerar fichas que están realmente en casa (routeIndex = -1)
+    // NO incluir fichas en meta (routeIndex = -2)
+    const piecesInHome = player.pieces.filter(p => p.routeIndex === -1);
     const playerId = this.currentPlayerIdx;
     
     // Obtener el punto de inicio específico del jugador
@@ -441,8 +453,8 @@ export default class GameScene extends Phaser.Scene {
       lastPiece.sprite.x = startCell.x + this.board.cellSize/2;
       lastPiece.sprite.y = startCell.y + this.board.cellSize/2;
       
-      // Buscar otra ficha en el tablero para mover
-      const pieceInBoard = player.pieces.find(p => p.routeIndex >= 0 && p !== lastPiece);
+      // Buscar otra ficha en el tablero para mover (que NO esté en meta)
+      const pieceInBoard = player.pieces.find(p => p.routeIndex >= 0 && p.routeIndex !== -2 && p !== lastPiece);
       if (pieceInBoard) {
         const currentIndex = pieceInBoard.routeIndex;
         const newIndex = (currentIndex + diceValue) % this.board.route.length;
@@ -460,8 +472,8 @@ export default class GameScene extends Phaser.Scene {
         }
       }
     } else {
-      // No hay fichas en casa (caso extraño)
-      console.log('No hay fichas en casa para colocar');
+      // No hay fichas en casa para colocar
+      console.log('No hay fichas en casa para colocar - todas están en tablero o en meta');
     }
   }
 
@@ -501,6 +513,9 @@ export default class GameScene extends Phaser.Scene {
       if (!movement.used) {
         // Verificar si alguna ficha puede usar este valor de dado
         for (const piece of player.pieces) {
+          // Ignorar fichas que ya están en la meta
+          if (piece.routeIndex === -2) continue;
+          
           const possibleMoves = this.board.getPossibleMovesForSingleDice(piece, movement.diceValue);
           if (possibleMoves.length > 0) {
             return true; // Encontró al menos un movimiento válido
@@ -529,7 +544,7 @@ export default class GameScene extends Phaser.Scene {
         const canMove = (this.turnState === 'NORMAL_MOVEMENT' && this.movementsLeft > 0) ||
                        (this.turnState === 'INITIAL_ROLLS' && hasDice);
         
-        if (isCurrentPlayer && canMove) {
+        if (isCurrentPlayer && canMove && p.routeIndex !== -2) {
           p.sprite.setInteractive();
           p.sprite.on('pointerdown', () => this.selectPiece(p));
         }
@@ -562,9 +577,11 @@ export default class GameScene extends Phaser.Scene {
   /** Inicializa el turno según el estado del jugador */
   resetRolls() {
     const pl = this.players[this.currentPlayerIdx];
-    const allInHome = pl.pieces.every(p => p.routeIndex < 0);
+    // Verificar si todas las fichas movibles están en casa (excluyendo las que están en meta)
+    const movablePieces = pl.pieces.filter(p => p.routeIndex !== -2); // Excluir fichas en meta
+    const allMovablePiecesInHome = movablePieces.every(p => p.routeIndex === -1);
     
-    if (allInHome) {
+    if (allMovablePiecesInHome && movablePieces.length > 0) {
       // Fase inicial: hasta 3 intentos para sacar dobles
       this.turnState = 'INITIAL_ROLLS';
       this.rollsLeft = 3;
@@ -581,5 +598,57 @@ export default class GameScene extends Phaser.Scene {
     this.usedDiceValues = [];
     this.pendingMovements = [];
     this.currentDice = null;
+  }
+
+  /** Mueve una ficha a la zona de meta visual */
+  movePieceToGoal(piece) {
+    const playerId = piece.player.id;
+    const player = this.players[playerId];
+    
+    // Contar cuántas fichas ya están en la meta para este jugador
+    const piecesInGoal = player.pieces.filter(p => p.routeIndex === -2).length;
+    
+    // Obtener la posición visual para esta ficha
+    const goalPosition = this.board.getGoalPosition(playerId, piecesInGoal);
+    
+    if (goalPosition) {
+      // Mover la ficha a la posición de meta visual
+      piece.sprite.x = goalPosition.x + this.board.cellSize/2;
+      piece.sprite.y = goalPosition.y + this.board.cellSize/2;
+      
+      // Marcar la ficha como en meta (usando -2 para distinguir de casa que es -1)
+      piece.routeIndex = -2;
+      
+      // Hacer la ficha un poco más brillante para indicar que llegó a la meta
+      piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(3, 0xffd700); // borde dorado
+      piece.sprite.setDepth(2); // ponerla encima de otras fichas
+      
+      console.log(`¡Ficha ${piece.index} del jugador ${playerId} llegó a la meta!`);
+      
+      // Verificar si el jugador ganó (todas las fichas en meta)
+      this.checkWinCondition(playerId);
+    }
+  }
+
+  /** Verifica si un jugador ha ganado */
+  checkWinCondition(playerId) {
+    const player = this.players[playerId];
+    const piecesInGoal = player.pieces.filter(p => p.routeIndex === -2).length;
+    
+    if (piecesInGoal === 4) {
+      const playerNames = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+      console.log(`¡El jugador ${playerNames[playerId]} ha ganado!`);
+      
+      // Mostrar mensaje de victoria
+      this.add.text(
+        this.cameras.main.width / 2,
+        this.cameras.main.height / 2,
+        `¡${playerNames[playerId]} Ganó!`,
+        { fontSize: '48px', fill: '#fff', stroke: '#000', strokeThickness: 4 }
+      ).setOrigin(0.5).setDepth(100);
+      
+      // Detener el juego
+      this.scene.pause();
+    }
   }
 } 
