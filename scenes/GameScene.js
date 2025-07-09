@@ -10,7 +10,12 @@ export default class GameScene extends Phaser.Scene {
     this.selectedPiece = null;
     // índice del jugador actual
     this.currentPlayerIdx = 0;
-    // número de tiros restantes en el turno
+    // gestión de intentos iniciales de dobles (hasta 3)
+    this.initialPhase = true;       // en fase inicial de sacar dobles
+    this.initialAttempts = 3;      // intentos disponibles para la fase inicial
+    // contador de dobles consecutivos en fase normal
+    this.consecDoubles = 0;
+    // número de tiros restantes (fase normal)
     this.rollsLeft = 0;
   }
 
@@ -60,10 +65,14 @@ export default class GameScene extends Phaser.Scene {
       this.game.events.emit('diceRolled', d1, d2);
     });
 
-    // escuchar evento de dados y preparar selección para el jugador actual
+    // escuchar evento de dados y gestionar fase inicial o normal
     this.game.events.on('diceRolled', (d1, d2) => {
       this.currentDice = [d1, d2];
-      this.enableCurrentPlayerPieces();
+      if (this.initialPhase) {
+        this.handleInitialRoll(d1, d2);
+      } else {
+        this.enableCurrentPlayerPieces();
+      }
     });
     this.enableCurrentPlayerPieces();
   }
