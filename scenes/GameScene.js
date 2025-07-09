@@ -10,6 +10,8 @@ export default class GameScene extends Phaser.Scene {
     this.selectedPiece = null;
     // índice del jugador actual
     this.currentPlayerIdx = 0;
+    // número de tiros restantes en el turno
+    this.rollsLeft = 0;
   }
 
   create() {
@@ -18,6 +20,13 @@ export default class GameScene extends Phaser.Scene {
     this.drawBoard();
     // lanzar la escena de UI para mostrar controles de dados
     this.scene.launch('UIScene');
+    // inicializar turnos y tiros tras el lanzamiento de la UI (demorar un tick)
+    this.time.delayedCall(0, () => {
+      this.resetRolls();
+      this.game.events.emit('turnChanged', this.currentPlayerIdx);
+      this.game.events.emit('rollsLeft', this.rollsLeft);
+      this.enableCurrentPlayerPieces();
+    }, null, this);
 
     // configurar 4 jugadores (1 local + 3 CPU) y dibujar fichas en casas
     this.players = [];
@@ -56,8 +65,6 @@ export default class GameScene extends Phaser.Scene {
       this.currentDice = [d1, d2];
       this.enableCurrentPlayerPieces();
     });
-    // indicar inicio de turno
-    this.game.events.emit('turnChanged', this.currentPlayerIdx);
     this.enableCurrentPlayerPieces();
   }
 
@@ -149,11 +156,12 @@ export default class GameScene extends Phaser.Scene {
     // actualizar índice de ruta
     piece.routeIndex = newIndex;
     this.clearHighlights();
-    // finalizar turno (captura o par)
+    // calcular extraRoll: par o captura
+    const isDouble = this.currentDice[0] === this.currentDice[1];
     const didCapture = cell.type !== 'safe' && this.players.some(pl =>
       pl.id !== piece.player.id && pl.pieces.some(p2 => p2.routeIndex === -1)
     );
-    this.endTurn(didCapture);
+    this.endTurn(isDouble || didCapture);
   }
 
   /** Elimina resaltados de movimiento anteriores. */
@@ -180,18 +188,25 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Finaliza el turno según reglas de par o captura */
-  endTurn(didCapture) {
-    const [d1, d2] = this.currentDice || [];
-    const isDouble = d1 === d2;
-    // cambiar turno sólo si no hay captura ni par
-    if (!didCapture && !isDouble) {
+  /** Finaliza el turno; si extraRoll se omite o es false, consume tiro y cambia turno si se agotan */
+  endTurn(extraRoll = false) {
+    // consumir un tiro y añadir extra si corresponde
+    this.rollsLeft = this.rollsLeft - 1 + (extraRoll ? 1 : 0);
+    if (this.rollsLeft <= 0) {
+      // avanzar turno
       this.currentPlayerIdx = (this.currentPlayerIdx + 1) % this.players.length;
+      this.resetRolls();
+      this.game.events.emit('turnChanged', this.currentPlayerIdx);
     }
-    // reset de dados y notificar cambio
-    this.currentDice = null;
-    this.selectedPiece = null;
-    this.game.events.emit('turnChanged', this.currentPlayerIdx);
+    // notificar tiros restantes y habilitar piezas
+    this.game.events.emit('rollsLeft', this.rollsLeft);
     this.enableCurrentPlayerPieces();
+  }
+
+  /** Inicializa rollsLeft según fichas en casa: 3 intentos si todas en casa, sino 1 */
+  resetRolls() {
+    const pl = this.players[this.currentPlayerIdx];
+    const allInHome = pl.pieces.every(p => p.routeIndex < 0);
+    this.rollsLeft = allInHome ? 3 : 1;
   }
 } 

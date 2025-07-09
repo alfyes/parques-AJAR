@@ -11,6 +11,11 @@ export default class UIScene extends Phaser.Scene {
     this.game.events.on('turnChanged', idx => {
       this.turnText.setText(`Turno: ${turnNames[idx]}`);
     });
+    // texto de tiros restantes
+    this.rollsText = this.add.text(300, 20, 'Tiros: 0', { fontSize: '20px', fill: '#fff' });
+    this.game.events.on('rollsLeft', n => {
+      this.rollsText.setText(`Tiros: ${n}`);
+    });
     // botón para tirar dados
     const btn = this.add.rectangle(width - 80, height - 50, 160, 40, 0x888888).setInteractive();
     this.add.text(width - 80, height - 50, 'Tirar dados', { fontSize: '18px', fill: '#000' }).setOrigin(0.5);
