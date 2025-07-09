@@ -23,15 +23,7 @@ export default class UIScene extends Phaser.Scene {
       this.movementsText.setText(`Movimientos: ${n}`);
     });
     
-    // texto de estado del turno
-    this.stateText = this.add.text(100, 50, 'Estado: Inicial', { fontSize: '16px', fill: '#fff' }).setDepth(10);
-    this.game.events.on('turnStateChanged', state => {
-      const stateNames = {
-        'INITIAL_ROLLS': 'Sacando fichas',
-        'NORMAL_MOVEMENT': 'Movimiento normal'
-      };
-      this.stateText.setText(`Estado: ${stateNames[state] || state}`);
-    });
+
     // botón para tirar dados
     this.diceButton = this.add.rectangle(width - 80, height - 50, 160, 40, 0x888888).setInteractive().setDepth(20);
     this.diceButtonText = this.add.text(width - 80, height - 50, 'Tirar dados', { fontSize: '18px', fill: '#000' }).setOrigin(0.5).setDepth(21);
@@ -256,7 +248,6 @@ export default class UIScene extends Phaser.Scene {
       this.turnText,
       this.rollsText,
       this.movementsText,
-      this.stateText,
       this.diceButton,
       this.diceButtonText,
       this.diceText,
