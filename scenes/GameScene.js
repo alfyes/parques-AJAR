@@ -80,6 +80,8 @@ export default class GameScene extends Phaser.Scene {
    */
   drawBoard() {
     const graphics = this.add.graphics();
+    const playerColors = [0xff6666, 0xffff66, 0x66ff66, 0x6666ff]; // Rojo, Amarillo, Verde, Azul
+    
     this.board.getCells().forEach(cell => {
       let color = 0xffffff;
       switch (cell.type) {
@@ -93,6 +95,73 @@ export default class GameScene extends Phaser.Scene {
       graphics.fillStyle(color).fillRect(cell.x, cell.y, this.board.cellSize, this.board.cellSize);
       graphics.lineStyle(1, 0x000000).strokeRect(cell.x, cell.y, this.board.cellSize, this.board.cellSize);
     });
+    
+    // Marcar las casillas de meta de cada jugador
+    this.markGoalCells(graphics, playerColors);
+    
+    // Agregar banderas en las casillas de meta
+    this.addGoalFlags();
+  }
+
+  /**
+   * Marca las casillas de meta con bordes de colores
+   */
+  markGoalCells(graphics, playerColors) {
+    for (let playerId = 0; playerId < 4; playerId++) {
+      const goalIndex = this.board.getPlayerGoalIndex(playerId);
+      const goalCell = this.board.route[goalIndex];
+      
+      if (goalCell) {
+        // Dibujar borde grueso del color del jugador
+        graphics.lineStyle(4, playerColors[playerId]);
+        graphics.strokeRect(goalCell.x, goalCell.y, this.board.cellSize, this.board.cellSize);
+        
+        // Agregar borde interno más delgado para mejor visibilidad
+        graphics.lineStyle(2, 0xffffff);
+        graphics.strokeRect(goalCell.x + 2, goalCell.y + 2, this.board.cellSize - 4, this.board.cellSize - 4);
+      }
+    }
+  }
+
+  /**
+   * Agrega pequeñas banderas en las casillas de meta
+   */
+  addGoalFlags() {
+    const playerColors = [0xff6666, 0xffff66, 0x66ff66, 0x6666ff]; // Rojo, Amarillo, Verde, Azul
+    
+    for (let playerId = 0; playerId < 4; playerId++) {
+      const goalIndex = this.board.getPlayerGoalIndex(playerId);
+      const goalCell = this.board.route[goalIndex];
+      
+      if (goalCell) {
+        // Crear una pequeña bandera usando graphics
+        const flagGraphics = this.add.graphics();
+        const flagX = goalCell.x + this.board.cellSize - 12;
+        const flagY = goalCell.y + 4;
+        
+        // Mástil de la bandera
+        flagGraphics.lineStyle(1, 0x8B4513); // Color marrón para el mástil
+        flagGraphics.lineBetween(flagX, flagY, flagX, flagY + 16);
+        
+        // Bandera triangular
+        flagGraphics.fillStyle(playerColors[playerId]);
+        flagGraphics.fillTriangle(
+          flagX, flagY,           // Punto superior
+          flagX + 8, flagY + 3,   // Punto derecho
+          flagX, flagY + 6        // Punto inferior
+        );
+        
+        // Borde de la bandera
+        flagGraphics.lineStyle(1, 0x000000);
+        flagGraphics.strokeTriangle(
+          flagX, flagY,
+          flagX + 8, flagY + 3,
+          flagX, flagY + 6
+        );
+        
+        flagGraphics.setDepth(1);
+      }
+    }
   }
 
   /**
