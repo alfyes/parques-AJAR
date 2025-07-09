@@ -317,15 +317,15 @@ export default class GameScene extends Phaser.Scene {
       // Actualizar índice después de la animación
       piece.routeIndex = newIndex;
       piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
+      
+      // Verificar si la ficha llegó a la meta DESPUÉS de la animación
+      if (this.board.isAtGoal(piece)) {
+        this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
+        // Reproducir sonido de llegada a meta
+        this.audioManager.playGoalReached();
+        this.movePieceToGoal(piece);
+      }
     });
-    
-    // Verificar si la ficha llegó a la meta
-    if (this.board.isAtGoal(piece)) {
-      this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
-      // Reproducir sonido de llegada a meta
-      this.audioManager.playGoalReached();
-      this.movePieceToGoal(piece);
-    }
     
     return didCapture;
   }
@@ -374,15 +374,15 @@ export default class GameScene extends Phaser.Scene {
       piece.routeIndex = newIndex;
       // aplicar el color del jugador a la pieza
       piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
+      
+      // Verificar si la ficha llegó a la meta DESPUÉS de la animación
+      if (this.board.isAtGoal(piece)) {
+        this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
+        // Reproducir sonido de llegada a meta
+        this.audioManager.playGoalReached();
+        this.movePieceToGoal(piece);
+      }
     });
-    
-    // Verificar si la ficha llegó a la meta
-    if (this.board.isAtGoal(piece)) {
-      this.helpSystem.showTemporaryMessage('¡Ficha en la meta! ¡Muy bien!', 2500);
-      // Reproducir sonido de llegada a meta
-      this.audioManager.playGoalReached();
-      this.movePieceToGoal(piece);
-    }
     
     return newIndex;
   }
@@ -789,7 +789,7 @@ export default class GameScene extends Phaser.Scene {
     this.currentDice = null;
   }
 
-  /** Mueve una ficha a la zona de meta visual */
+  /** Mueve una ficha a la zona de meta visual con animación celebratoria */
   movePieceToGoal(piece) {
     const playerId = piece.player.id;
     const player = this.players[playerId];
@@ -801,21 +801,55 @@ export default class GameScene extends Phaser.Scene {
     const goalPosition = this.board.getGoalPosition(playerId, piecesInGoal);
     
     if (goalPosition) {
-      // Mover la ficha a la posición de meta visual
-      piece.sprite.x = goalPosition.x + this.board.cellSize/2;
-      piece.sprite.y = goalPosition.y + this.board.cellSize/2;
+      const targetX = goalPosition.x + this.board.cellSize/2;
+      const targetY = goalPosition.y + this.board.cellSize/2;
       
-      // Marcar la ficha como en meta (usando -2 para distinguir de casa que es -1)
+      // Marcar la ficha como en meta inmediatamente (usando -2 para distinguir de casa que es -1)
       piece.routeIndex = -2;
       
-      // Hacer la ficha un poco más brillante para indicar que llegó a la meta
-      piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(3, 0xffd700); // borde dorado
-      piece.sprite.setDepth(2); // ponerla encima de otras fichas
+      // Animación celebratoria hacia la zona de meta
+      this.tweens.add({
+        targets: piece.sprite,
+        x: targetX,
+        y: targetY,
+        duration: 800,
+        ease: 'Back.easeOut',
+        onStart: () => {
+          // Efecto de celebración durante el movimiento
+          piece.sprite.setDepth(20);
+          piece.sprite.setScale(1.3);
+        },
+        onUpdate: (tween) => {
+          // Efecto de brillo pulsante durante el movimiento
+          const progress = tween.progress;
+          const pulse = Math.sin(progress * Math.PI * 6) * 0.1 + 1;
+          piece.sprite.setScale(1.3 * pulse);
+        },
+        onComplete: () => {
+          // Aplicar el estilo dorado final
+          piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(3, 0xffd700); // borde dorado
+          piece.sprite.setDepth(2); // ponerla encima de otras fichas
+          piece.sprite.setScale(1);
+          
+          // Efecto final de "aterrizaje" en la meta
+          this.tweens.add({
+            targets: piece.sprite,
+            scaleX: 1.4,
+            scaleY: 0.6,
+            duration: 150,
+            ease: 'Quad.easeOut',
+            yoyo: true,
+            onComplete: () => {
+              piece.sprite.setScale(1);
+              
+              // Verificar si el jugador ganó (todas las fichas en meta)
+              this.checkWinCondition(playerId);
+            }
+          });
+        }
+      });
       
       console.log(`¡Ficha ${piece.index} del jugador ${playerId} llegó a la meta!`);
-      
-      // Verificar si el jugador ganó (todas las fichas en meta)
-      this.checkWinCondition(playerId);
     }
   }
 
