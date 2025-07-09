@@ -79,11 +79,13 @@ export default class Board {
   getPossibleMoves(piece, diceValues) {
     const moves = [];
     const sum = diceValues[0] + diceValues[1];
-    // si la ficha está en casa, solo sale con un 5 al índice 0 de la ruta
+    
+    // si la ficha está en casa, solo sale con dobles
     if (piece.routeIndex < 0) {
-      // solo salir de casa si ambos dados son iguales (par)
       if (diceValues[0] === diceValues[1]) {
-        moves.push(this.route[0]);
+        // Salir de casa: colocar en salida y mover el valor del dado
+        const moveIndex = Math.min(diceValues[0], this.route.length - 1);
+        moves.push(this.route[moveIndex]);
       }
     } else {
       // avanzar sum casillas en la ruta
@@ -92,6 +94,26 @@ export default class Board {
         moves.push(this.route[newIndex]);
       }
     }
+    return moves;
+  }
+
+  /**
+   * Calcula casillas posibles para un solo dado.
+   */
+  getPossibleMovesForSingleDice(piece, diceValue) {
+    const moves = [];
+    
+    // Si la ficha está en casa, no puede moverse con un solo dado
+    if (piece.routeIndex < 0) {
+      return moves;
+    }
+    
+    // Avanzar el valor del dado individual
+    const newIndex = piece.routeIndex + diceValue;
+    if (newIndex < this.route.length) {
+      moves.push(this.route[newIndex]);
+    }
+    
     return moves;
   }
 } 

@@ -10,13 +10,14 @@ export default class GameScene extends Phaser.Scene {
     this.selectedPiece = null;
     // índice del jugador actual
     this.currentPlayerIdx = 0;
-    // gestión de intentos iniciales de dobles (hasta 3)
-    this.initialPhase = true;       // en fase inicial de sacar dobles
-    this.initialAttempts = 3;      // intentos disponibles para la fase inicial
-    // contador de dobles consecutivos en fase normal
-    this.consecDoubles = 0;
-    // número de tiros restantes (fase normal)
-    this.rollsLeft = 0;
+    
+    // Sistema de estados de turno
+    this.turnState = 'INITIAL_ROLLS'; // 'INITIAL_ROLLS' | 'NORMAL_MOVEMENT'
+    this.rollsLeft = 0; // intentos restantes en el turno actual
+    this.movementsLeft = 0; // movimientos pendientes en turno normal
+    this.consecutiveDoubles = 0; // contador de dobles consecutivos
+    this.usedDiceValues = []; // valores de dados ya utilizados en movimientos
+    this.pendingMovements = []; // movimientos pendientes: [{diceValue, used: false}]
   }
 
   create() {
@@ -30,6 +31,8 @@ export default class GameScene extends Phaser.Scene {
       this.resetRolls();
       this.game.events.emit('turnChanged', this.currentPlayerIdx);
       this.game.events.emit('rollsLeft', this.rollsLeft);
+      this.game.events.emit('movementsLeft', this.movementsLeft);
+      this.game.events.emit('turnStateChanged', this.turnState);
       this.enableCurrentPlayerPieces();
     }, null, this);
 
@@ -65,14 +68,9 @@ export default class GameScene extends Phaser.Scene {
       this.game.events.emit('diceRolled', d1, d2);
     });
 
-    // escuchar evento de dados y gestionar fase inicial o normal
+    // escuchar evento de dados y manejar según el estado del turno
     this.game.events.on('diceRolled', (d1, d2) => {
-      this.currentDice = [d1, d2];
-      if (this.initialPhase) {
-        this.handleInitialRoll(d1, d2);
-      } else {
-        this.enableCurrentPlayerPieces();
-      }
+      this.handleDiceRoll(d1, d2);
     });
     this.enableCurrentPlayerPieces();
   }
@@ -103,10 +101,54 @@ export default class GameScene extends Phaser.Scene {
   selectPiece(piece) {
     if (!this.currentDice) return;
     this.selectedPiece = piece;
-    const moves = this.board.getPossibleMoves(piece, this.currentDice);
     this.clearHighlights();
+    
+    if (this.turnState === 'NORMAL_MOVEMENT' && this.movementsLeft > 0) {
+      // En fase normal: mostrar movimientos para cada dado individual
+      this.showIndividualDiceMovements(piece);
+    } else {
+      // En otras fases: usar lógica anterior
+      const moves = this.board.getPossibleMoves(piece, this.currentDice);
+      this.showMovementMarkers(piece, moves);
+    }
+  }
+
+  /** Muestra movimientos individuales por cada dado disponible */
+  showIndividualDiceMovements(piece) {
+    this.pendingMovements.forEach((movement, index) => {
+      if (!movement.used) {
+        const moves = this.board.getPossibleMovesForSingleDice(piece, movement.diceValue);
+        moves.forEach(cell => {
+          const radius = this.board.cellSize / 2 - 4;
+          const marker = this.add.circle(
+            cell.x + this.board.cellSize/2,
+            cell.y + this.board.cellSize/2,
+            radius,
+            0x00ff00,
+            0.5
+          ).setInteractive();
+          
+          // Añadir texto con el valor del dado
+          const text = this.add.text(
+            cell.x + this.board.cellSize/2,
+            cell.y + this.board.cellSize/2,
+            movement.diceValue.toString(),
+            { fontSize: '12px', fill: '#000' }
+          ).setOrigin(0.5);
+          
+          marker.on('pointerdown', () => this.movePieceWithSingleDice(piece, cell, index));
+          marker.setDepth(1);
+          text.setDepth(2);
+          this.moveMarkers.push(marker);
+          this.moveMarkers.push(text);
+        });
+      }
+    });
+  }
+
+  /** Muestra marcadores de movimiento estándar */
+  showMovementMarkers(piece, moves) {
     moves.forEach(cell => {
-      // dibujar círculo indicador de movimiento
       const radius = this.board.cellSize / 2 - 4;
       const marker = this.add.circle(
         cell.x + this.board.cellSize/2,
@@ -122,12 +164,88 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Mueve la ficha al destino y limpia resaltados.
+   * Mueve la ficha usando un solo dado en fase normal.
    */
-  movePiece(piece, cell) {
+  movePieceWithSingleDice(piece, cell, movementIndex) {
+    // Marcar el movimiento como usado
+    this.pendingMovements[movementIndex].used = true;
+    this.movementsLeft--;
+    
+    // Realizar el movimiento y verificar captura
+    const didCapture = this.performPieceMovementWithCaptureCheck(piece, cell);
+    
+    // Verificar si quedan movimientos
+    if (this.movementsLeft <= 0) {
+      // No quedan movimientos: verificar si hay tirada extra por dobles o captura
+      const isDouble = this.currentDice[0] === this.currentDice[1];
+      if (isDouble || didCapture) {
+        // Tirada extra por dobles o captura
+        this.endTurn(true);
+      } else {
+        // Fin del turno
+        this.endTurn(false);
+      }
+    } else {
+      // Aún quedan movimientos: actualizar UI
+      this.game.events.emit('movementsLeft', this.movementsLeft);
+    }
+    
+    this.clearHighlights();
+  }
+
+  /**
+   * Realiza el movimiento y retorna si hubo captura.
+   */
+  performPieceMovementWithCaptureCheck(piece, cell) {
+    const newIndex = this.board.route.indexOf(cell);
+    let didCapture = false;
+    
+    // Verificar captura antes del movimiento
+    if (cell.type !== 'safe') {
+      this.players.forEach(pl => {
+        if (pl.id !== piece.player.id) {
+          pl.pieces.forEach(p2 => {
+            if (p2.routeIndex === newIndex) {
+              didCapture = true;
+              // regresar ficha enemiga a casa
+              p2.routeIndex = -1;
+              // ubicar ficha capturada en primer home libre
+              const homeType = ['home-red','home-yellow','home-green','home-blue'][pl.id];
+              const homeCells = this.board.getCells().filter(c => c.type === homeType);
+              let cellHome = homeCells.find(c => {
+                const px = c.x + this.board.cellSize/2;
+                const py = c.y + this.board.cellSize/2;
+                return !pl.pieces.some(p3 => p3.routeIndex < 0 && p3 !== p2 && p3.sprite.x === px && p3.sprite.y === py);
+              });
+              if (!cellHome) cellHome = homeCells[0];
+              p2.sprite.x = cellHome.x + this.board.cellSize/2;
+              p2.sprite.y = cellHome.y + this.board.cellSize/2;
+              p2.sprite.setFillStyle(p2.player.color, 1).setStrokeStyle(2, 0x000000);
+              p2.sprite.setDepth(1);
+              console.log(`Ficha capturada: player ${pl.id}, index ${p2.index}`);
+            }
+          });
+        }
+      });
+    }
+    
+    // Mover ficha propia
+    piece.sprite.x = cell.x + this.board.cellSize/2;
+    piece.sprite.y = cell.y + this.board.cellSize/2;
+    piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
+    piece.routeIndex = newIndex;
+    
+    return didCapture;
+  }
+
+  /**
+   * Realiza el movimiento físico de la ficha (sin lógica de turnos).
+   */
+  performPieceMovement(piece, cell) {
     // capturar fichas enemigas según routeIndex (no safe)
     const newIndex = this.board.route.indexOf(cell);
-    console.log('movePiece: newIndex =', newIndex);
+    console.log('performPieceMovement: newIndex =', newIndex);
+    
     if (cell.type !== 'safe') {
       this.players.forEach(pl => {
         if (pl.id !== piece.player.id) {
@@ -157,6 +275,7 @@ export default class GameScene extends Phaser.Scene {
         }
       });
     }
+    
     // mover ficha propia
     piece.sprite.x = cell.x + this.board.cellSize/2;
     piece.sprite.y = cell.y + this.board.cellSize/2;
@@ -164,7 +283,17 @@ export default class GameScene extends Phaser.Scene {
     piece.sprite.setFillStyle(piece.player.color, 1).setStrokeStyle(2, 0x000000);
     // actualizar índice de ruta
     piece.routeIndex = newIndex;
+    
+    return newIndex;
+  }
+
+  /**
+   * Mueve la ficha al destino y limpia resaltados (método legacy).
+   */
+  movePiece(piece, cell) {
+    this.performPieceMovement(piece, cell);
     this.clearHighlights();
+    
     // calcular extraRoll: par o captura
     const isDouble = this.currentDice[0] === this.currentDice[1];
     const didCapture = cell.type !== 'safe' && this.players.some(pl =>
@@ -179,6 +308,163 @@ export default class GameScene extends Phaser.Scene {
     this.moveMarkers = [];
   }
 
+  /** Maneja la tirada de dados según el estado del turno */
+  handleDiceRoll(d1, d2) {
+    this.currentDice = [d1, d2];
+    const isDouble = d1 === d2;
+    
+    if (this.turnState === 'INITIAL_ROLLS') {
+      this.handleInitialRolls(d1, d2, isDouble);
+    } else if (this.turnState === 'NORMAL_MOVEMENT') {
+      this.handleNormalMovement(d1, d2, isDouble);
+    }
+  }
+
+  /** Maneja las tiradas iniciales (todas las fichas en casa) */
+  handleInitialRolls(d1, d2, isDouble) {
+    this.rollsLeft--;
+    
+    if (isDouble) {
+      // Conseguimos dobles: colocar ficha y cambiar a fase normal
+      console.log(`¡Dobles conseguidos! (${d1},${d2}) - Colocando ficha`);
+      this.placeInitialPiece(d1);
+      // Cambiar a fase normal con tirada extra por dobles
+      this.turnState = 'NORMAL_MOVEMENT';
+      this.rollsLeft = 1; // tirada extra por dobles
+      this.consecutiveDoubles = 1;
+      this.movementsLeft = 0; // se configurará en la próxima tirada
+      this.game.events.emit('rollsLeft', this.rollsLeft);
+      this.game.events.emit('movementsLeft', this.movementsLeft);
+      this.game.events.emit('turnStateChanged', this.turnState);
+    } else {
+      // No son dobles: consumir intento
+      console.log(`No son dobles (${d1},${d2}) - Intentos restantes: ${this.rollsLeft}`);
+      if (this.rollsLeft <= 0) {
+        // Se agotaron los intentos: pasar turno
+        this.endTurn(false);
+      } else {
+        // Aún quedan intentos: actualizar UI
+        this.game.events.emit('rollsLeft', this.rollsLeft);
+        this.currentDice = null; // limpiar dados para evitar selección de fichas
+      }
+    }
+  }
+
+  /** Maneja el movimiento en fase normal */
+  handleNormalMovement(d1, d2, isDouble) {
+    this.rollsLeft--;
+    
+    // Configurar movimientos pendientes
+    this.pendingMovements = [
+      { diceValue: d1, used: false },
+      { diceValue: d2, used: false }
+    ];
+    this.movementsLeft = 2;
+    
+    if (isDouble) {
+      this.consecutiveDoubles++;
+      console.log(`Dobles en fase normal (${d1},${d2}) - Consecutivos: ${this.consecutiveDoubles}`);
+      
+      if (this.consecutiveDoubles >= 3) {
+        // 3 dobles consecutivos: última ficha movida va a meta
+        console.log('¡3 dobles consecutivos! Última ficha movida va a meta');
+        this.handleThreeConsecutiveDoubles();
+        return;
+      }
+    } else {
+      this.consecutiveDoubles = 0;
+    }
+    
+    // Habilitar selección de fichas
+    this.enableCurrentPlayerPieces();
+    this.game.events.emit('rollsLeft', this.rollsLeft);
+    this.game.events.emit('movementsLeft', this.movementsLeft);
+  }
+
+  /** Coloca fichas iniciales según las reglas de dobles */
+  placeInitialPiece(diceValue) {
+    const player = this.players[this.currentPlayerIdx];
+    const piecesInHome = player.pieces.filter(p => p.routeIndex < 0);
+    
+    if (piecesInHome.length >= 2) {
+      // Puede introducir dos fichas
+      console.log(`Introduciendo dos fichas con dobles ${diceValue}`);
+      
+      // Primera ficha: colocar en salida y mover
+      const firstPiece = piecesInHome[0];
+      firstPiece.routeIndex = 0;
+      const startCell = this.board.route[0];
+      firstPiece.sprite.x = startCell.x + this.board.cellSize/2;
+      firstPiece.sprite.y = startCell.y + this.board.cellSize/2;
+      
+      // Mover la primera ficha el valor del dado
+      const newIndex = Math.min(diceValue, this.board.route.length - 1);
+      firstPiece.routeIndex = newIndex;
+      const newCell = this.board.route[newIndex];
+      firstPiece.sprite.x = newCell.x + this.board.cellSize/2;
+      firstPiece.sprite.y = newCell.y + this.board.cellSize/2;
+      
+      // Segunda ficha: solo colocar en salida (con pequeño offset para evitar solapamiento)
+      const secondPiece = piecesInHome[1];
+      secondPiece.routeIndex = 0;
+      secondPiece.sprite.x = startCell.x + this.board.cellSize/2 + 5; // offset visual
+      secondPiece.sprite.y = startCell.y + this.board.cellSize/2 + 5;
+      
+      console.log(`Dos fichas colocadas: primera movida ${diceValue} casillas, segunda en salida`);
+    } else if (piecesInHome.length === 1) {
+      // Solo una ficha en casa: colocar y buscar otra ficha en tablero para mover
+      console.log(`Solo una ficha en casa, introduciendo y moviendo otra del tablero`);
+      
+      const lastPiece = piecesInHome[0];
+      lastPiece.routeIndex = 0;
+      const startCell = this.board.route[0];
+      lastPiece.sprite.x = startCell.x + this.board.cellSize/2;
+      lastPiece.sprite.y = startCell.y + this.board.cellSize/2;
+      
+      // Buscar otra ficha en el tablero para mover
+      const pieceInBoard = player.pieces.find(p => p.routeIndex >= 0 && p !== lastPiece);
+      if (pieceInBoard) {
+        const currentIndex = pieceInBoard.routeIndex;
+        const newIndex = Math.min(currentIndex + diceValue, this.board.route.length - 1);
+        pieceInBoard.routeIndex = newIndex;
+        const newCell = this.board.route[newIndex];
+        pieceInBoard.sprite.x = newCell.x + this.board.cellSize/2;
+        pieceInBoard.sprite.y = newCell.y + this.board.cellSize/2;
+        console.log(`Ficha del tablero movida ${diceValue} casillas`);
+      }
+    } else {
+      // No hay fichas en casa (caso extraño)
+      console.log('No hay fichas en casa para colocar');
+    }
+  }
+
+  /** Maneja el caso de 3 dobles consecutivos */
+  handleThreeConsecutiveDoubles() {
+    console.log('¡3 dobles consecutivos! Enviando última ficha movida a meta');
+    
+    // Encontrar la última ficha movida (la que tiene el índice más alto en la ruta)
+    const player = this.players[this.currentPlayerIdx];
+    const piecesInBoard = player.pieces.filter(p => p.routeIndex >= 0);
+    
+    if (piecesInBoard.length > 0) {
+      // Encontrar la ficha más avanzada (asumiendo que es la última movida)
+      const lastMovedPiece = piecesInBoard.reduce((max, piece) => 
+        piece.routeIndex > max.routeIndex ? piece : max
+      );
+      
+      // Enviar a meta (final de la ruta)
+      const metaIndex = this.board.route.length - 1;
+      lastMovedPiece.routeIndex = metaIndex;
+      const metaCell = this.board.route[metaIndex];
+      lastMovedPiece.sprite.x = metaCell.x + this.board.cellSize/2;
+      lastMovedPiece.sprite.y = metaCell.y + this.board.cellSize/2;
+      
+      console.log(`Ficha ${lastMovedPiece.index} enviada a meta por 3 dobles consecutivos`);
+    }
+    
+    this.endTurn(false);
+  }
+
   update(time, delta) {
     // game loop
   }
@@ -189,7 +475,14 @@ export default class GameScene extends Phaser.Scene {
       pl.pieces.forEach(p => {
         p.sprite.removeAllListeners();
         p.sprite.disableInteractive();
-        if (idx === this.currentPlayerIdx && this.currentDice) {
+        
+        // Solo habilitar si es el jugador actual y hay dados disponibles
+        const isCurrentPlayer = idx === this.currentPlayerIdx;
+        const hasDice = this.currentDice !== null;
+        const canMove = (this.turnState === 'NORMAL_MOVEMENT' && this.movementsLeft > 0) ||
+                       (this.turnState === 'INITIAL_ROLLS' && hasDice);
+        
+        if (isCurrentPlayer && canMove) {
           p.sprite.setInteractive();
           p.sprite.on('pointerdown', () => this.selectPiece(p));
         }
@@ -199,23 +492,46 @@ export default class GameScene extends Phaser.Scene {
 
   /** Finaliza el turno; si extraRoll se omite o es false, consume tiro y cambia turno si se agotan */
   endTurn(extraRoll = false) {
-    // consumir un tiro y añadir extra si corresponde
-    this.rollsLeft = this.rollsLeft - 1 + (extraRoll ? 1 : 0);
-    if (this.rollsLeft <= 0) {
-      // avanzar turno
+    if (extraRoll) {
+      // Tirada extra: mantener jugador actual
+      this.rollsLeft = 1;
+      this.currentDice = null;
+      this.pendingMovements = [];
+      this.movementsLeft = 0;
+    } else {
+      // Fin del turno: cambiar jugador
       this.currentPlayerIdx = (this.currentPlayerIdx + 1) % this.players.length;
       this.resetRolls();
       this.game.events.emit('turnChanged', this.currentPlayerIdx);
     }
+    
     // notificar tiros restantes y habilitar piezas
     this.game.events.emit('rollsLeft', this.rollsLeft);
+    this.game.events.emit('movementsLeft', this.movementsLeft);
     this.enableCurrentPlayerPieces();
   }
 
-  /** Inicializa rollsLeft según fichas en casa: 3 intentos si todas en casa, sino 1 */
+  /** Inicializa el turno según el estado del jugador */
   resetRolls() {
     const pl = this.players[this.currentPlayerIdx];
     const allInHome = pl.pieces.every(p => p.routeIndex < 0);
-    this.rollsLeft = allInHome ? 3 : 1;
+    
+    if (allInHome) {
+      // Fase inicial: hasta 3 intentos para sacar dobles
+      this.turnState = 'INITIAL_ROLLS';
+      this.rollsLeft = 3;
+      this.movementsLeft = 0;
+    } else {
+      // Fase normal: 1 tirada inicial, 2 movimientos
+      this.turnState = 'NORMAL_MOVEMENT';
+      this.rollsLeft = 1;
+      this.movementsLeft = 0;
+    }
+    
+    // Reiniciar contadores
+    this.consecutiveDoubles = 0;
+    this.usedDiceValues = [];
+    this.pendingMovements = [];
+    this.currentDice = null;
   }
 } 
